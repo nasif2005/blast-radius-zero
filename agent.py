@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from sandbox_launcher_v2 import run_sandbox
+from sandbox_launcher_v3 import run_sandbox
 
 load_dotenv()
 
