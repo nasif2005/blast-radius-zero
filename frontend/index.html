@@ -1,0 +1,216 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Blast Radius Zero</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #0b1220;
+      color: #e5e7eb;
+      font-family: Arial, sans-serif;
+    }
+    header {
+      padding: 24px;
+      background: #111c30;
+      border-bottom: 1px solid #334155;
+    }
+    header h1 { margin: 0 0 8px; }
+    header p { margin: 0; color: #94a3b8; }
+    main {
+      max-width: 1100px;
+      margin: 30px auto;
+      padding: 0 20px;
+    }
+    section {
+      background: #172235;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 22px;
+      margin-bottom: 20px;
+    }
+    h2 { margin-top: 0; font-size: 19px; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 14px;
+      border-radius: 8px;
+      border: 1px solid #475569;
+      background: #0b1220;
+      color: white;
+      font: inherit;
+      resize: vertical;
+    }
+    button {
+      margin-top: 15px;
+      padding: 12px 22px;
+      border: 0;
+      border-radius: 8px;
+      background: #2563eb;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: .55;
+      cursor: wait;
+    }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      background: #080f1c;
+      padding: 16px;
+      border-radius: 8px;
+      min-height: 55px;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .metric {
+      background: #0b1220;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .metric span {
+      display: block;
+      color: #94a3b8;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .metric strong { font-size: 18px; }
+    .success { color: #4ade80; }
+    .failure { color: #f87171; }
+    #status { margin-left: 14px; color: #94a3b8; }
+    @media (max-width: 700px) {
+      .grid, .metrics { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Blast Radius Zero</h1>
+    <p>AI-Powered Python Execution in a Restricted Docker Sandbox</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Programming Request</h2>
+      <textarea id="prompt">Write Python code to calculate the factorial of 5 and print the result.</textarea>
+      <button id="runButton" onclick="executeTask()">Generate & Execute</button>
+      <span id="status" role="status">Ready</span>
+    </section>
+
+    <div class="grid">
+      <section>
+        <h2>Generated Python Code</h2>
+        <pre id="code">Waiting for request...</pre>
+      </section>
+      <section>
+        <h2>Execution Output</h2>
+        <pre id="stdout">Waiting for execution...</pre>
+        <h2>Standard Error</h2>
+        <pre id="stderr">None</pre>
+      </section>
+    </div>
+
+    <section>
+      <h2>Sandbox Execution Metrics</h2>
+      <div class="metrics">
+        <div class="metric">
+          <span>Exit Code</span>
+          <strong id="exitCode">—</strong>
+        </div>
+        <div class="metric">
+          <span>Execution Duration</span>
+          <strong id="duration">—</strong>
+        </div>
+        <div class="metric">
+          <span>Timed Out</span>
+          <strong id="timeout">—</strong>
+        </div>
+        <div class="metric">
+          <span>Container Cleanup</span>
+          <strong id="cleanup">—</strong>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    async function executeTask() {
+      const prompt = document.getElementById("prompt").value.trim();
+      const button = document.getElementById("runButton");
+      const status = document.getElementById("status");
+
+      if (!prompt) {
+        status.textContent = "Please enter a programming request.";
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = "Generating code and executing in Docker...";
+
+      for (const id of ["code", "stdout", "stderr"]) {
+        document.getElementById(id).textContent = "Waiting...";
+      }
+      for (const id of ["exitCode", "duration", "timeout", "cleanup"]) {
+        document.getElementById(id).textContent = "—";
+      }
+
+      try {
+        const response = await fetch("/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt })
+        });
+
+        if (!response.ok) {
+          throw new Error("API request failed (HTTP " + response.status + ")");
+        }
+
+        const data = await response.json();
+        const execution = data.execution;
+
+        document.getElementById("code").textContent =
+          data.generated_code || "(No code returned)";
+        document.getElementById("stdout").textContent =
+          execution.stdout || "(No standard output)";
+        document.getElementById("stderr").textContent =
+          execution.stderr || "None";
+
+        document.getElementById("exitCode").textContent =
+          String(execution.exit_code);
+        document.getElementById("duration").textContent =
+          execution.duration + " seconds";
+        document.getElementById("timeout").textContent =
+          String(execution.timed_out);
+        document.getElementById("cleanup").textContent =
+          execution.cleanup_success ? "Successful" : "Failed";
+
+        status.textContent =
+          execution.exit_code === 0 && !execution.timed_out
+            ? "Execution completed."
+            : "Execution finished with an error or timeout.";
+      } catch (error) {
+        status.textContent = "Error: " + error.message;
+        document.getElementById("stdout").textContent =
+          "Unable to complete the request.";
+      } finally {
+        button.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
